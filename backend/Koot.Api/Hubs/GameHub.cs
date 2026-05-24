@@ -76,6 +76,7 @@ public class GameHub : Hub
 
         var session = await _db.GameSessions
             .Include(s => s.Quiz)
+                .ThenInclude(q => q!.Questions)
             .Include(s => s.Participants)
             .FirstOrDefaultAsync(s => s.Code == code);
 
@@ -101,6 +102,7 @@ public class GameHub : Hub
             Status = session.Status.ToString(),
             session.CurrentQuestionIndex,
             QuizTitle = session.Quiz!.Title,
+            TotalQuestions = session.Quiz.Questions.Count,
             Participants = session.Participants.Select(p => new ParticipantDto
             {
                 Id = p.Id,
