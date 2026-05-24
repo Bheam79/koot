@@ -9,6 +9,21 @@ export default defineConfig({
     port: 443,
     strictPort: true,
     allowedHosts: ['koot.ai.ba.gl', 'localhost', '127.0.0.1'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5024',
+        changeOrigin: true,
+      },
+      '/hubs': {
+        target: 'http://localhost:5024',
+        ws: true,
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:5024',
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     environment: 'jsdom',

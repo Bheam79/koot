@@ -79,11 +79,44 @@ container** (not in a sibling docker container) bound to container port
 
 - `/usr/bin/node` has `cap_net_bind_service=ep` set, so `claude` (uid 1000)
   can bind to port 443 without sudo or container restart.
-- `frontend/vite.config.ts` pins `server.port=443`, `host='0.0.0.0'`, and
-  `allowedHosts: ['koot.ai.ba.gl', 'localhost', '127.0.0.1']` (Vite blocks
-  unknown Host headers by default).
+- `frontend/vite.config.ts` pins `server.port=443`, `host='0.0.0.0'`,
+  `allowedHosts: ['koot.ai.ba.gl', 'localhost', '127.0.0.1']`, and
+  **proxy rules** for `/api`, `/hubs`, and `/uploads` → `http://localhost:5024`.
+  The proxy is essential: browser API calls must go through Vite so they hit
+  the backend inside the dev container, not the user's local machine.
+- `frontend/.env.development` sets `VITE_API_URL=` (empty) so axios uses
+  relative paths (`/api/...`) that the Vite proxy can intercept.
 - `docker-compose.yml` still maps the frontend service to host port `5173`;
   that's for users who prefer running the whole stack via compose. The
   in-container dev-server flow does not use docker-compose.
-- Start it: `cd frontend && nohup npm run dev > /tmp/koot-dev.log 2>&1 &`.
-  Verify with `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:443/`.
+
+### Full dev startup (in-container)
+
+```bash
+# 1. Start MariaDB sibling (no host port — use container IP directly)
+docker run -d --name koot-mariadb \
+  -e MARIADB_ROOT_PASSWORD=rootpass -e MARIADB_DATABASE=koot \
+  -e MARIADB_USER=koot -e MARIADB_PASSWORD=koot mariadb:11
+DB_IP=$(docker inspect koot-mariadb --format '{{.NetworkSettings.IPAddress}}')
+until docker exec koot-mariadb mariadb-admin ping -uroot -prootpass --silent 2>/dev/null; do sleep 1; done
+
+# 2. Run migrations
+cd /workspace/repo/backend/Koot.Api
+ConnectionStrings__DefaultConnection="Server=$DB_IP;Port=3306;Database=koot;User=koot;Password=koot;" \
+  dotnet ef database update
+
+# 3. Start backend (keep terminal / nohup)
+cd /workspace/repo/backend
+ConnectionStrings__DefaultConnection="Server=$DB_IP;Port=3306;Database=koot;User=koot;Password=koot;" \
+  nohup dotnet run --project Koot.Api/Koot.Api.csproj --urls http://0.0.0.0:5024 > /tmp/koot-backend.log 2>&1 &
+# wait until listening:
+until curl -s http://localhost:5024/api/health > /dev/null; do sleep 1; done
+
+# 4. Start Vite dev server
+cd /workspace/repo/frontend
+nohup npm run dev > /tmp/koot-dev.log 2>&1 &
+```
+
+Podman default network does **not** support DNS resolution by container name
+(containers can only reach each other by IP). Always use
+`docker inspect <name> --format '{{.NetworkSettings.IPAddress}}'` to get the IP.
