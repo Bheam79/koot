@@ -1,0 +1,23 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+
+# IDE
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# Tooling
+.dotnet/
+.nuget/
+
+# Logs
+logs/
+*.log
+
+# Local secrets
+appsettings.Local.json
+secrets.json

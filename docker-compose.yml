@@ -1,0 +1,61 @@
+services:
+  mariadb:
+    image: mariadb:11
+    container_name: koot-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: koot
+      MARIADB_USER: koot
+      MARIADB_PASSWORD: koot
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    container_name: koot-backend
+    working_dir: /app
+    command: ["dotnet", "run", "--project", "Koot.Api/Koot.Api.csproj", "--urls", "http://0.0.0.0:5024"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:5024
+      ConnectionStrings__DefaultConnection: "Server=mariadb;Port=3306;Database=koot;User=koot;Password=koot;"
+      Jwt__Issuer: "KootApi"
+      Jwt__Audience: "KootClient"
+      Jwt__Key: "CHANGE_ME_SUPER_SECRET_KEY_AT_LEAST_32_CHARS_LONG_FOR_HS256"
+      Jwt__ExpiryMinutes: "60"
+    ports:
+      - "5024:5024"
+    volumes:
+      - ./backend:/app
+      - dotnet_nuget:/root/.nuget/packages
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  frontend:
+    image: node:22
+    container_name: koot-frontend
+    working_dir: /app
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0 --port 5173"]
+    environment:
+      VITE_API_BASE_URL: "http://localhost:5024"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  mariadb_data:
+  dotnet_nuget:
+  frontend_node_modules:
