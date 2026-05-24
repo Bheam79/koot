@@ -74,3 +74,30 @@ export const HostPhase = {
   Error: 'error',
 } as const
 export type HostPhase = (typeof HostPhase)[keyof typeof HostPhase]
+
+// The phase the player UI is in
+export const PlayerPhase = {
+  Joining: 'joining',      // connecting + calling JoinGame
+  Lobby: 'lobby',          // waiting for host to start
+  Question: 'question',    // answering
+  Answered: 'answered',    // answer submitted, waiting for question end
+  QuestionResult: 'questionResult', // ✓/✗ feedback
+  Leaderboard: 'leaderboard',
+  Podium: 'podium',
+  Error: 'error',
+} as const
+export type PlayerPhase = (typeof PlayerPhase)[keyof typeof PlayerPhase]
+
+/** Sent back to the player after SubmitAnswer succeeds */
+export interface AnswerAccepted {
+  points: number
+  isCorrect: boolean
+}
+
+/** QuestionType values as used in broadcasts */
+export const QType = {
+  MultipleChoice: 0,
+  TrueFalse: 1,
+  TypeAnswer: 2,
+  Poll: 3,
+} as const

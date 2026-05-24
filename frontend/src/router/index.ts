@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
   },
   { path: '/join', name: 'join', component: () => import('../views/JoinView.vue') },
   {
+    path: '/join/:code',
+    name: 'player-setup',
+    component: () => import('../views/PlayerSetupView.vue'),
+    props: true,
+  },
+  {
     path: '/play/:code',
     name: 'play-game',
     component: () => import('../views/PlayGameView.vue'),
