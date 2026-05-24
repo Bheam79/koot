@@ -6,8 +6,9 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 443,
     strictPort: true,
+    allowedHosts: ['koot.ai.ba.gl', 'localhost', '127.0.0.1'],
   },
   test: {
     environment: 'jsdom',
