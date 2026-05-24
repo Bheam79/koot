@@ -3,6 +3,7 @@
 // and emits an "update:modelValue" with the server-relative URL.
 import { computed, ref } from 'vue'
 import { absoluteUrl, uploadImage } from '../api/quizzes'
+import { useToast } from '../composables/useToast'
 
 const props = defineProps<{
   modelValue?: string | null
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const errorMsg = ref<string | null>(null)
+const toast = useToast()
 
 const previewUrl = computed(() => absoluteUrl(props.modelValue))
 
@@ -32,11 +34,15 @@ async function onChange(ev: Event) {
   input.value = ''
 
   if (file.size > 5 * 1024 * 1024) {
-    errorMsg.value = 'Image must be 5 MB or smaller.'
+    const msg = 'Image must be 5 MB or smaller.'
+    errorMsg.value = msg
+    toast.error(msg)
     return
   }
   if (!/^image\/(jpe?g|png|gif|webp)$/i.test(file.type)) {
-    errorMsg.value = 'Only JPG, PNG, GIF, or WEBP images are supported.'
+    const msg = 'Only JPG, PNG, GIF, or WEBP images are supported.'
+    errorMsg.value = msg
+    toast.error(msg)
     return
   }
 
@@ -47,7 +53,9 @@ async function onChange(ev: Event) {
     emit('update:modelValue', res.url)
   } catch (e: unknown) {
     const err = e as { response?: { data?: { error?: string } }; message?: string }
-    errorMsg.value = err.response?.data?.error ?? err.message ?? 'Upload failed.'
+    const msg = err.response?.data?.error ?? err.message ?? 'Image upload failed. Please try again.'
+    errorMsg.value = msg
+    toast.error(msg)
   } finally {
     uploading.value = false
   }

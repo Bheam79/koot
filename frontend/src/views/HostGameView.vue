@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useHostHub } from '../composables/useHostHub'
+import { useToast } from '../composables/useToast'
 import HostLobby from '../components/game/HostLobby.vue'
 import QuestionDisplay from '../components/game/QuestionDisplay.vue'
 import QuestionResults from '../components/game/QuestionResults.vue'
@@ -26,6 +27,7 @@ const props = defineProps<{ code: string }>()
 const auth = useAuthStore()
 const router = useRouter()
 const hub = useHostHub()
+const toast = useToast()
 
 // ── Reactive state ────────────────────────────────────────────────────────────
 
@@ -87,7 +89,6 @@ hub.on('SessionState', (state) => {
   if (s.status === 'Lobby') {
     phase.value = HostPhase.Lobby
   }
-  // If reconnecting mid-game we'd handle that here
 })
 
 hub.on('PlayerJoined', (p) => {
@@ -105,7 +106,6 @@ hub.on('QuestionStarted', (q, timeLimit) => {
   currentQuestion.value = q
   secondsLeft.value = timeLimit
   answeredCount.value = 0
-  // orderIndex is the DB position of the question in the quiz (0-based)
   questionIndex.value = q.orderIndex
   phase.value = HostPhase.Question
   starting.value = false
@@ -119,7 +119,6 @@ hub.on('QuestionEnded', (ca, res) => {
   correctAnswers.value = ca
   results.value = res
 
-  // Update participant scores from results
   for (const r of res) {
     const p = participants.value.find((x) => x.id === r.participantId)
     if (p) p.totalScore = r.totalScore
@@ -130,7 +129,6 @@ hub.on('QuestionEnded', (ca, res) => {
 
 hub.on('LeaderboardUpdate', (entries) => {
   leaderboard.value = entries
-  // Don't switch phase here — wait for host button press
 })
 
 hub.on('GameEnded', (standings) => {
@@ -139,7 +137,7 @@ hub.on('GameEnded', (standings) => {
 })
 
 hub.on('Error', (msg) => {
-  errorMsg.value = msg
+  toast.error(msg)
   starting.value = false
 })
 
@@ -151,14 +149,13 @@ async function onStart() {
   try {
     await hub.startGame(props.code)
   } catch {
-    errorMsg.value = 'Failed to start game. Please try again.'
+    toast.error('Failed to start game. Please try again.')
     starting.value = false
   }
 }
 
 async function onNext() {
   errorMsg.value = null
-  // Show leaderboard first, then host clicks Next there
   phase.value = HostPhase.Leaderboard
 }
 
@@ -167,12 +164,11 @@ async function onNextFromLeaderboard() {
   try {
     await hub.nextQuestion(props.code)
   } catch {
-    errorMsg.value = 'Failed to advance question.'
+    toast.error('Failed to advance to next question.')
   }
 }
 
 async function onEndFromResults() {
-  // Show leaderboard, then final
   phase.value = HostPhase.Leaderboard
 }
 
@@ -180,12 +176,26 @@ async function onEndFromLeaderboard() {
   try {
     await hub.endGame(props.code)
   } catch {
-    errorMsg.value = 'Failed to end game.'
+    toast.error('Failed to end game.')
   }
 }
 
 async function onPlayAgain() {
   router.push('/dashboard')
+}
+
+// ── Fullscreen ─────────────────────────────────────────────────────────────────
+
+async function toggleFullscreen() {
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen()
+    } else {
+      await document.exitFullscreen()
+    }
+  } catch {
+    // Fullscreen not supported or denied — ignore gracefully
+  }
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -196,7 +206,6 @@ onMounted(async () => {
     return
   }
 
-  // Fetch session info for quizTitle and totalQuestions
   try {
     const resp = await fetch(
       `${import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5024'}/api/games/${props.code}`,
@@ -207,14 +216,13 @@ onMounted(async () => {
       quizTitle.value = info.quizTitle
     }
   } catch {
-    // Non-fatal: we'll get it from SessionState anyway
+    // Non-fatal
   }
 
   try {
     await hub.connect(auth.token!)
     await hub.joinAsHost(props.code)
   } catch {
-    errorMsg.value = 'Could not connect to the game server. Please refresh.'
     phase.value = HostPhase.Error
   }
 })
@@ -244,7 +252,7 @@ onUnmounted(() => {
     <div class="text-center max-w-md px-4">
       <div class="text-5xl mb-4">❌</div>
       <p class="text-xl font-bold mb-2">Connection Error</p>
-      <p class="text-white/70 mb-6">{{ errorMsg }}</p>
+      <p class="text-white/70 mb-6">Could not connect to the game server. Please refresh the page.</p>
       <button
         class="px-6 py-3 rounded-xl bg-white text-koot-purple font-bold hover:opacity-90"
         @click="router.push('/dashboard')"
@@ -263,6 +271,7 @@ onUnmounted(() => {
     :can-start="canStart"
     :starting="starting"
     @start="onStart"
+    @fullscreen="toggleFullscreen"
   />
 
   <!-- Question in progress -->
@@ -306,26 +315,38 @@ onUnmounted(() => {
     @play-again="onPlayAgain"
   />
 
-  <!-- Error toast (non-blocking) -->
-  <Transition name="toast">
+  <!-- Reconnecting overlay -->
+  <Transition name="fade-overlay">
     <div
-      v-if="errorMsg && phase !== 'error'"
-      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-koot-magenta text-white px-6 py-3 rounded-xl shadow-xl font-semibold z-50"
+      v-if="hub.reconnecting"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
     >
-      {{ errorMsg }}
-      <button class="ml-4 opacity-70 hover:opacity-100" @click="errorMsg = null">✕</button>
+      <div class="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl max-w-xs mx-4">
+        <div class="text-4xl mb-3 animate-spin">🔄</div>
+        <p class="text-xl font-black text-slate-800">Reconnecting…</p>
+        <p class="text-slate-500 text-sm mt-1">Please wait while we restore the connection.</p>
+      </div>
     </div>
   </Transition>
+
+  <!-- Fullscreen hint button (always visible, top-right) -->
+  <button
+    v-if="phase !== 'connecting' && phase !== 'error'"
+    class="fixed top-4 right-4 z-40 bg-black/30 hover:bg-black/50 text-white rounded-lg px-3 py-1.5 text-sm font-semibold transition-all backdrop-blur-sm"
+    title="Toggle fullscreen"
+    @click="toggleFullscreen"
+  >
+    ⛶
+  </button>
 </template>
 
 <style scoped>
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
+.fade-overlay-enter-active,
+.fade-overlay-leave-active {
+  transition: opacity 0.3s ease;
 }
-.toast-enter-from,
-.toast-leave-to {
+.fade-overlay-enter-from,
+.fade-overlay-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(20px);
 }
 </style>

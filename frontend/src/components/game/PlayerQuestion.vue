@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import type { QuestionBroadcast } from '../../types/game'
 import { QType } from '../../types/game'
+import { useSound } from '../../composables/useSound'
 
 const props = defineProps<{
   question: QuestionBroadcast
@@ -17,6 +18,8 @@ const emit = defineEmits<{
   submitText: [text: string, timeTakenMs: number]
 }>()
 
+const { playClick, playCountdown } = useSound()
+
 const textAnswer = ref('')
 const questionStartTime = ref(Date.now())
 
@@ -27,6 +30,16 @@ watch(
     questionStartTime.value = Date.now()
   },
   { immediate: true },
+)
+
+// Play countdown tick when time is low
+watch(
+  () => props.secondsLeft,
+  (s) => {
+    if (s <= 5 && s > 0 && !props.answered) {
+      playCountdown()
+    }
+  },
 )
 
 const timerPercent = computed(() =>
@@ -49,12 +62,14 @@ const OPTION_STYLES = [
 
 function onPickOption(optionId: number) {
   if (props.answered) return
+  playClick()
   const ms = Date.now() - questionStartTime.value
   emit('submitOption', optionId, ms)
 }
 
 function onSubmitText() {
   if (props.answered || !textAnswer.value.trim()) return
+  playClick()
   const ms = Date.now() - questionStartTime.value
   emit('submitText', textAnswer.value.trim(), ms)
 }
@@ -75,20 +90,22 @@ const isTypeAnswer = computed(() => props.question.type === QType.TypeAnswer)
     </div>
 
     <!-- Question text -->
-    <div class="flex-1 flex flex-col items-center justify-center px-6 py-6 gap-4">
+    <div class="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-6 gap-4">
       <img
         v-if="question.imageUrl"
         :src="question.imageUrl"
         class="max-h-36 rounded-xl object-cover shadow-xl"
         alt=""
       />
-      <h2 class="text-2xl md:text-3xl font-black text-center leading-snug max-w-2xl">
+      <h2 class="text-xl sm:text-2xl md:text-3xl font-black text-center leading-snug max-w-2xl">
         {{ question.questionText }}
       </h2>
       <div class="flex items-center gap-3 text-white/50 text-sm">
         <span>{{ question.points }} pts</span>
         <span>·</span>
-        <span>{{ secondsLeft }}s left</span>
+        <span :class="secondsLeft <= 5 ? 'text-koot-magenta font-black animate-pulse' : ''">
+          {{ secondsLeft }}s left
+        </span>
       </div>
     </div>
 
@@ -100,7 +117,7 @@ const isTypeAnswer = computed(() => props.question.type === QType.TypeAnswer)
           v-for="opt in question.answerOptions"
           :key="opt.id"
           :class="[
-            'rounded-2xl py-6 font-black text-2xl transition-all shadow-lg',
+            'rounded-2xl py-8 sm:py-10 font-black text-2xl transition-all shadow-lg',
             opt.text.toLowerCase() === 'true' ? 'bg-koot-green' : 'bg-koot-magenta',
             answered && selectedOptionId === opt.id ? 'ring-4 ring-white scale-95' : '',
             answered && selectedOptionId !== opt.id ? 'opacity-30' : '',
@@ -128,7 +145,7 @@ const isTypeAnswer = computed(() => props.question.type === QType.TypeAnswer)
         />
         <button
           :disabled="answered || !textAnswer.trim()"
-          class="py-4 rounded-2xl font-black text-xl bg-koot-blue text-white shadow-lg
+          class="py-5 rounded-2xl font-black text-xl bg-koot-blue text-white shadow-lg
                  transition-all hover:opacity-90 active:scale-95
                  disabled:opacity-40 disabled:cursor-not-allowed"
           @click="onSubmitText"
@@ -138,12 +155,12 @@ const isTypeAnswer = computed(() => props.question.type === QType.TypeAnswer)
       </div>
 
       <!-- Multiple choice / Poll -->
-      <div v-else class="grid grid-cols-2 gap-2">
+      <div v-else class="grid grid-cols-2 gap-2 sm:gap-3">
         <button
           v-for="(opt, i) in question.answerOptions"
           :key="opt.id"
           :class="[
-            'rounded-2xl py-5 px-4 flex items-center gap-2 min-h-[4.5rem] font-bold text-lg transition-all shadow-lg',
+            'rounded-2xl py-6 sm:py-8 px-3 sm:px-4 flex items-center gap-2 min-h-[5rem] font-bold text-base sm:text-lg transition-all shadow-lg',
             OPTION_STYLES[i % 4].bg,
             answered && selectedOptionId === opt.id
               ? 'ring-4 ring-white scale-95'
@@ -158,8 +175,8 @@ const isTypeAnswer = computed(() => props.question.type === QType.TypeAnswer)
           :disabled="answered"
           @click="onPickOption(opt.id)"
         >
-          <span class="text-xl opacity-80">{{ OPTION_STYLES[i % 4].shape }}</span>
-          <span class="leading-tight">{{ opt.text }}</span>
+          <span class="text-xl opacity-80 shrink-0">{{ OPTION_STYLES[i % 4].shape }}</span>
+          <span class="leading-tight text-left">{{ opt.text }}</span>
         </button>
       </div>
     </div>

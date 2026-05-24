@@ -31,6 +31,7 @@ interface HubHandlers {
 export function useHostHub() {
   const connection = ref<signalR.HubConnection | null>(null)
   const connected = ref(false)
+  const reconnecting = ref(false)
   const error = ref<string | null>(null)
 
   const handlers: HubHandlers = {}
@@ -47,7 +48,7 @@ export function useHostHub() {
         transport: signalR.HttpTransportType.WebSockets,
         skipNegotiation: false,
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect([0, 2000, 5000, 10000, 20000])
       .configureLogging(signalR.LogLevel.Warning)
       .build()
 
@@ -66,11 +67,19 @@ export function useHostHub() {
     conn.on('SessionState', (s: unknown) => handlers.SessionState?.(s))
     conn.on('Error', (msg: string) => handlers.Error?.(msg))
 
-    conn.onclose(() => {
+    conn.onreconnecting(() => {
       connected.value = false
+      reconnecting.value = true
     })
+
     conn.onreconnected(() => {
       connected.value = true
+      reconnecting.value = false
+    })
+
+    conn.onclose(() => {
+      connected.value = false
+      reconnecting.value = false
     })
 
     connection.value = conn
@@ -103,12 +112,14 @@ export function useHostHub() {
   async function disconnect() {
     await connection.value?.stop()
     connected.value = false
+    reconnecting.value = false
   }
 
   onUnmounted(disconnect)
 
   return {
     connected,
+    reconnecting,
     error,
     on,
     connect,

@@ -7,6 +7,7 @@ import { onBeforeRouteLeave, RouterLink, useRouter } from 'vue-router'
 import ImageUpload from '../components/ImageUpload.vue'
 import QuestionEditor from '../components/QuestionEditor.vue'
 import QuizTopNav from '../components/QuizTopNav.vue'
+import { useToast } from '../composables/useToast'
 import {
   createQuestion,
   createQuiz,
@@ -25,6 +26,7 @@ import type { Question, QuizDetail } from '../types/quiz'
 const props = defineProps<{ id?: string }>()
 
 const router = useRouter()
+const toast = useToast()
 
 // ---------- state ----------
 const quizId = ref<number | null>(props.id ? Number(props.id) : null)
@@ -102,9 +104,11 @@ async function saveQuizMetadata() {
     }
     dirty.value = false
     successMsg.value = 'Saved.'
+    toast.success('Quiz saved.')
     return true
   } catch (e: unknown) {
     errorMsg.value = extractErr(e, 'Save failed.')
+    toast.error(errorMsg.value ?? 'Save failed.')
     return false
   } finally {
     saving.value = false

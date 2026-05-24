@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePlayerHub } from '../composables/usePlayerHub'
+import { useToast } from '../composables/useToast'
 import PlayerLobby from '../components/game/PlayerLobby.vue'
 import PlayerQuestion from '../components/game/PlayerQuestion.vue'
 import PlayerResult from '../components/game/PlayerResult.vue'
@@ -27,14 +28,16 @@ const router = useRouter()
 const nickname = ref((route.query.nickname as string | undefined) ?? '')
 const avatarId = ref(Number(route.query.avatarId ?? 1))
 
-// ── Composable ────────────────────────────────────────────────────────────────
+// ── Composables ────────────────────────────────────────────────────────────────
 
 const hub = usePlayerHub()
+const toast = useToast()
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
 const phase = ref<PlayerPhase>(PlayerPhase.Joining)
 const errorMsg = ref<string | null>(null)
+const hostDisconnected = ref(false)
 
 // Player identity (set after JoinedGame)
 const myParticipantId = ref(-1)
@@ -65,9 +68,6 @@ const streak = ref(0)
 const leaderboardEntries = ref<LeaderboardEntry[]>([])
 const finalStandings = ref<LeaderboardEntry[]>([])
 
-// ── Computed ──────────────────────────────────────────────────────────────────
-
-
 // ── SignalR handlers ──────────────────────────────────────────────────────────
 
 hub.on('JoinedGame', (p: Participant) => {
@@ -78,7 +78,6 @@ hub.on('JoinedGame', (p: Participant) => {
 
 hub.on('GameStarted', () => {
   // Hub will immediately follow with QuestionStarted
-  // So just make sure we're not stuck in Lobby
 })
 
 hub.on('QuestionStarted', (q: QuestionBroadcast, tl: number) => {
@@ -111,7 +110,6 @@ hub.on('AnswerAccepted', (a: AnswerAccepted) => {
 hub.on('QuestionEnded', (_correctAnswers: CorrectAnswerInfo[], results: AnswerResult[]) => {
   totalPlayers.value = results.length
 
-  // Find my result
   const mine = results.find((r) => r.participantId === myParticipantId.value)
   if (mine) {
     myTotalScore.value = mine.totalScore
@@ -120,11 +118,9 @@ hub.on('QuestionEnded', (_correctAnswers: CorrectAnswerInfo[], results: AnswerRe
     if (!mine.isCorrect) streak.value = 0
   }
 
-  // Compute my rank from results
   const sorted = [...results].sort((a, b) => b.totalScore - a.totalScore)
   myRank.value = sorted.findIndex((r) => r.participantId === myParticipantId.value) + 1
 
-  // If player never answered, show streak reset
   if (!answered.value) {
     streak.value = 0
   }
@@ -136,7 +132,6 @@ hub.on('LeaderboardUpdate', (entries: LeaderboardEntry[]) => {
   leaderboardEntries.value = entries
   totalPlayers.value = Math.max(totalPlayers.value, entries.length)
 
-  // Update rank from leaderboard
   const me = entries.find((e) => e.participantId === myParticipantId.value)
   if (me) {
     myRank.value = me.rank
@@ -157,9 +152,17 @@ hub.on('GameEnded', (standings: LeaderboardEntry[]) => {
 })
 
 hub.on('Error', (msg: string) => {
-  errorMsg.value = msg
+  toast.error(msg)
   if (phase.value === PlayerPhase.Joining) {
+    errorMsg.value = msg
     phase.value = PlayerPhase.Error
+  }
+})
+
+hub.on('Disconnected', () => {
+  // All reconnect attempts failed
+  if (phase.value !== PlayerPhase.Podium && phase.value !== PlayerPhase.Error) {
+    hostDisconnected.value = true
   }
 })
 
@@ -171,7 +174,7 @@ async function onSubmitOption(optionId: number, timeTakenMs: number) {
   try {
     await hub.submitAnswer(props.code, currentQuestion.value.id, optionId, null, timeTakenMs)
   } catch {
-    errorMsg.value = 'Failed to submit answer.'
+    toast.error('Failed to submit answer.')
     selectedOptionId.value = null
   }
 }
@@ -182,7 +185,7 @@ async function onSubmitText(text: string, timeTakenMs: number) {
   try {
     await hub.submitAnswer(props.code, currentQuestion.value.id, null, text, timeTakenMs)
   } catch {
-    errorMsg.value = 'Failed to submit answer.'
+    toast.error('Failed to submit answer.')
     submittedText.value = null
   }
 }
@@ -205,7 +208,7 @@ onMounted(async () => {
     return
   }
 
-  // Fetch game info for quizTitle and initial player count
+  // Fetch game info
   try {
     const resp = await fetch(`${BASE_URL}/api/games/${props.code}`)
     if (resp.ok) {
@@ -222,13 +225,23 @@ onMounted(async () => {
         phase.value = PlayerPhase.Error
         return
       }
+
+      if (info.status === 'InProgress') {
+        errorMsg.value = 'This game is already in progress. You cannot join mid-game.'
+        phase.value = PlayerPhase.Error
+        return
+      }
+    } else if (resp.status === 404) {
+      errorMsg.value = 'Game not found. Check the PIN and try again.'
+      phase.value = PlayerPhase.Error
+      return
     }
   } catch { /* non-fatal */ }
 
   try {
     await hub.connect()
     await hub.joinGame(props.code, nickname.value, avatarId.value)
-  } catch (e) {
+  } catch {
     errorMsg.value = 'Could not connect to the game server.'
     phase.value = PlayerPhase.Error
   }
@@ -319,26 +332,48 @@ onUnmounted(() => {
     @play-again="onPlayAgain"
   />
 
-  <!-- Non-blocking error toast -->
-  <Transition name="toast">
+  <!-- Reconnecting overlay -->
+  <Transition name="fade-overlay">
     <div
-      v-if="errorMsg && phase !== 'error'"
-      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-koot-magenta text-white px-6 py-3 rounded-xl shadow-xl font-semibold z-50 flex items-center gap-3"
+      v-if="hub.reconnecting && !hostDisconnected"
+      class="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
     >
-      <span>{{ errorMsg }}</span>
-      <button class="opacity-70 hover:opacity-100" @click="errorMsg = null">✕</button>
+      <div class="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl max-w-xs mx-4">
+        <div class="text-4xl mb-3 animate-spin">🔄</div>
+        <p class="text-xl font-black text-slate-800">Reconnecting…</p>
+        <p class="text-slate-500 text-sm mt-1">Trying to restore your connection.</p>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- Host disconnected overlay -->
+  <Transition name="fade-overlay">
+    <div
+      v-if="hostDisconnected"
+      class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 px-4"
+    >
+      <div class="bg-white rounded-2xl px-8 py-8 text-center shadow-2xl max-w-sm w-full">
+        <div class="text-5xl mb-4">🔌</div>
+        <p class="text-2xl font-black text-slate-800 mb-2">Host disconnected</p>
+        <p class="text-slate-500 mb-6">The host's connection was lost. The game may have ended.</p>
+        <button
+          class="px-6 py-3 rounded-xl bg-koot-purple text-white font-bold hover:opacity-90 w-full"
+          @click="router.push('/join')"
+        >
+          Back to Join
+        </button>
+      </div>
     </div>
   </Transition>
 </template>
 
 <style scoped>
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
+.fade-overlay-enter-active,
+.fade-overlay-leave-active {
+  transition: opacity 0.3s ease;
 }
-.toast-enter-from,
-.toast-leave-to {
+.fade-overlay-enter-from,
+.fade-overlay-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(20px);
 }
 </style>

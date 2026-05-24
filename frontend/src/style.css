@@ -8,4 +8,46 @@ html, body, #app {
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Smooth page transitions */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.2s ease;
+}
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+
+/* Game-screen transition */
+.game-enter-active,
+.game-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.game-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.game-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* Skeleton loader pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background: #e2e8f0;
+  border-radius: 0.5rem;
+}
+
+/* Pop animation (for answer feedback) */
+@keyframes pop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
 }

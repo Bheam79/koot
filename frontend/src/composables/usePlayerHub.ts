@@ -24,11 +24,14 @@ interface PlayerHubHandlers {
   LeaderboardUpdate?: (e: LeaderboardEntry[]) => void
   GameEnded?: (s: LeaderboardEntry[]) => void
   Error?: (msg: string) => void
+  /** Fired when all reconnect attempts fail (host likely disconnected) */
+  Disconnected?: () => void
 }
 
 export function usePlayerHub() {
   const connection = ref<signalR.HubConnection | null>(null)
   const connected = ref(false)
+  const reconnecting = ref(false)
   const error = ref<string | null>(null)
 
   const handlers: PlayerHubHandlers = {}
@@ -41,7 +44,7 @@ export function usePlayerHub() {
     // Players connect without JWT — the hub doesn't require auth for JoinGame
     const conn = new signalR.HubConnectionBuilder()
       .withUrl(`${BASE_URL}/hubs/game`)
-      .withAutomaticReconnect()
+      .withAutomaticReconnect([0, 2000, 5000, 10000, 20000])
       .configureLogging(signalR.LogLevel.Warning)
       .build()
 
@@ -59,8 +62,22 @@ export function usePlayerHub() {
     conn.on('GameEnded', (s: LeaderboardEntry[]) => handlers.GameEnded?.(s))
     conn.on('Error', (msg: string) => handlers.Error?.(msg))
 
-    conn.onclose(() => { connected.value = false })
-    conn.onreconnected(() => { connected.value = true })
+    conn.onreconnecting(() => {
+      connected.value = false
+      reconnecting.value = true
+    })
+
+    conn.onreconnected(() => {
+      connected.value = true
+      reconnecting.value = false
+    })
+
+    conn.onclose(() => {
+      connected.value = false
+      reconnecting.value = false
+      // All reconnect attempts failed — notify listeners
+      handlers.Disconnected?.()
+    })
 
     connection.value = conn
 
@@ -92,9 +109,10 @@ export function usePlayerHub() {
   async function disconnect() {
     await connection.value?.stop()
     connected.value = false
+    reconnecting.value = false
   }
 
   onUnmounted(disconnect)
 
-  return { connected, error, on, connect, joinGame, submitAnswer, disconnect }
+  return { connected, reconnecting, error, on, connect, joinGame, submitAnswer, disconnect }
 }
