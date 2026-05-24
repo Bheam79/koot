@@ -1,10 +1,11 @@
 <script setup lang="ts">
+// Thin wrapper - the actual editor lives in QuizEditorView. The `id` route param
+// triggers an initial GET /api/quizzes/:id load.
+import QuizEditorView from './QuizEditorView.vue'
+
 defineProps<{ id: string }>()
 </script>
 
 <template>
-  <section class="max-w-3xl mx-auto px-4 py-12">
-    <h1 class="text-2xl font-bold mb-4">Edit quiz #{{ id }}</h1>
-    <p class="text-slate-500">Placeholder — quiz editor lands in KOOT-6.</p>
-  </section>
+  <QuizEditorView :id="id" />
 </template>

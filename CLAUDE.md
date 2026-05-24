@@ -14,6 +14,13 @@ Working knowledge for future dispatches. Keep short and observational.
 - `MariaDbServerVersion(11.4)` is hard-coded in `Program.cs` and
   `AppDbContextFactory` — using `ServerVersion.AutoDetect` would force the
   host to talk to MySQL at startup and during migration scaffolding.
+- The frontend `tsconfig` enables `erasableSyntaxOnly`, so **TS `enum`
+  declarations fail vue-tsc** (`TS1294`). Mirror backend enums with a
+  `const` object + lookup type:
+  ```ts
+  export const QuestionType = { MultipleChoice: 0, /* ... */ } as const
+  export type QuestionType = (typeof QuestionType)[keyof typeof QuestionType]
+  ```
 
 ## EF Core migrations
 
