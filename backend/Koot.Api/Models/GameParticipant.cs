@@ -19,6 +19,9 @@ public class GameParticipant
 
     public int TotalScore { get; set; }
 
+    /// <summary>Set when the player disconnects mid-game; they remain in the standings.</summary>
+    public bool IsDisconnected { get; set; }
+
     // Navigation
     public ICollection<GameAnswer> Answers { get; set; } = new List<GameAnswer>();
 }

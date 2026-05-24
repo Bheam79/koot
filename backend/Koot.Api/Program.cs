@@ -85,6 +85,9 @@ builder.Services.AddAuthorization();
 
 // Application services
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<GameService>();
+builder.Services.AddSingleton<GameStateService>();
+builder.Services.AddHostedService<GameCleanupService>();
 
 // AutoMapper - scan this assembly for profiles
 builder.Services.AddAutoMapper(typeof(Program).Assembly);
@@ -118,7 +121,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// SignalR placeholder hub (real hub wired up in later tasks)
+// Game hub
 app.MapHub<GameHub>("/hubs/game");
 
 // Health endpoints
