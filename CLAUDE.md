@@ -69,3 +69,21 @@ docker rm -f koot-mariadb-test
 - `cd frontend && npm run build` — frontend SPA build.
 - `cd backend && dotnet build` — backend build (2 NU1903 warnings = OK,
   errors = real problem).
+
+## Frontend dev server on port 443 (KOOT-13)
+
+Per the project lead, the Vite dev server runs **directly inside this dev
+container** (not in a sibling docker container) bound to container port
+`443`. The host has `31143 -> :443` pre-mapped, so the live URL
+`http://koot.ai.ba.gl:31143/` reaches Vite directly.
+
+- `/usr/bin/node` has `cap_net_bind_service=ep` set, so `claude` (uid 1000)
+  can bind to port 443 without sudo or container restart.
+- `frontend/vite.config.ts` pins `server.port=443`, `host='0.0.0.0'`, and
+  `allowedHosts: ['koot.ai.ba.gl', 'localhost', '127.0.0.1']` (Vite blocks
+  unknown Host headers by default).
+- `docker-compose.yml` still maps the frontend service to host port `5173`;
+  that's for users who prefer running the whole stack via compose. The
+  in-container dev-server flow does not use docker-compose.
+- Start it: `cd frontend && nohup npm run dev > /tmp/koot-dev.log 2>&1 &`.
+  Verify with `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:443/`.
