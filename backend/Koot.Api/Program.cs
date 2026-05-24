@@ -1,6 +1,7 @@
 using System.Text;
 using Koot.Api.Data;
 using Koot.Api.Hubs;
+using Koot.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -81,6 +82,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
+// Application services
+builder.Services.AddScoped<IJwtService, JwtService>();
 
 // AutoMapper - scan this assembly for profiles
 builder.Services.AddAutoMapper(typeof(Program).Assembly);
