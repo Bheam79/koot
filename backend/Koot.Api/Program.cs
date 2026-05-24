@@ -108,6 +108,9 @@ if (app.Environment.IsDevelopment())
 // Do not force HTTPS redirect in containerized dev; uncomment for prod
 // app.UseHttpsRedirection();
 
+// Serve static files from wwwroot (used to expose uploaded images at /uploads/*)
+app.UseStaticFiles();
+
 app.UseCors("Frontend");
 
 app.UseAuthentication();
