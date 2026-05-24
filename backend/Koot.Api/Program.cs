@@ -36,8 +36,13 @@ builder.Services.AddCors(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                        ?? throw new InvalidOperationException("Missing 'DefaultConnection' connection string.");
 
+// Pin a server version so the host doesn't need to talk to the DB at startup
+// (AutoDetect would block app boot if the DB is unreachable). Override if you
+// upgrade the database major version.
+var dbServerVersion = new MariaDbServerVersion(new Version(11, 4, 0));
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    options.UseMySql(connectionString, dbServerVersion));
 
 // JWT bearer auth
 var jwtSection = builder.Configuration.GetSection("Jwt");
