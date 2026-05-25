@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/forms";
 
+@theme {
+  --color-koot-purple: #46178F;
+  --color-koot-magenta: #E21B3C;
+  --color-koot-blue: #1368CE;
+  --color-koot-green: #26890C;
+  --color-koot-yellow: #FFA602;
+}
+
 /* Project-wide base styles */
 html, body, #app {
   height: 100%;
