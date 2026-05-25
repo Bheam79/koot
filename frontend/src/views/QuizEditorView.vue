@@ -40,6 +40,8 @@ const errorMsg = ref<string | null>(null)
 const successMsg = ref<string | null>(null)
 const showTypePicker = ref(false)
 const dirty = ref(false)
+// Maps question index → list of validation error strings shown inline.
+const questionErrors = ref<Record<number, string[]>>({})
 
 // Tracks whether the local state differs from what's been persisted. We set this
 // to false right after a successful save, and back to true on any input change.
@@ -115,9 +117,43 @@ async function saveQuizMetadata() {
   }
 }
 
+/** Returns true if all questions pass client-side rules; populates questionErrors on failure. */
+function validateQuestions(): boolean {
+  const errs: Record<number, string[]> = {}
+  for (let i = 0; i < questions.value.length; i++) {
+    const q = questions.value[i]
+    const msgs: string[] = []
+
+    if (q.type === QuestionType.TypeAnswer) {
+      if (!q.answerOptions[0]?.text.trim()) {
+        msgs.push('Correct answer text is required.')
+      }
+    } else if (
+      q.type === QuestionType.MultipleChoice ||
+      q.type === QuestionType.Poll
+    ) {
+      if (q.answerOptions.some((o) => !o.text.trim())) {
+        msgs.push('All option texts must be filled in.')
+      }
+      if (q.type === QuestionType.MultipleChoice && !q.answerOptions.some((o) => o.isCorrect)) {
+        msgs.push('At least one option must be marked correct.')
+      }
+    }
+
+    if (msgs.length) errs[i] = msgs
+  }
+  questionErrors.value = errs
+  return Object.keys(errs).length === 0
+}
+
 async function saveAll() {
   if (!title.value.trim()) {
     errorMsg.value = 'Quiz title is required.'
+    return false
+  }
+
+  if (!validateQuestions()) {
+    errorMsg.value = 'Please fix the errors highlighted below before saving.'
     return false
   }
 
@@ -166,6 +202,7 @@ async function saveAll() {
     }
 
     dirty.value = false
+    questionErrors.value = {}
     successMsg.value = 'Quiz saved.'
     return true
   } catch (e: unknown) {
@@ -195,8 +232,6 @@ function addQuestion(type: QuestionType) {
           : [
               { text: '', isCorrect: false, orderIndex: 0 },
               { text: '', isCorrect: false, orderIndex: 1 },
-              { text: '', isCorrect: false, orderIndex: 2 },
-              { text: '', isCorrect: false, orderIndex: 3 },
             ],
   }
   questions.value.push(base)
@@ -353,6 +388,7 @@ const screenTitle = computed(() => (quizId.value === null ? 'New quiz' : 'Edit q
         :question="q"
         :index="idx"
         :total="questions.length"
+        :errors="questionErrors[idx]"
         @update:question="updateQuestionAt(idx, $event)"
         @delete="removeQuestion(idx)"
         @move-up="moveQuestion(idx, -1)"

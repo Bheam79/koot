@@ -16,6 +16,7 @@ const props = defineProps<{
   question: Question
   index: number
   total: number
+  errors?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -53,7 +54,7 @@ watch(
     } else {
       // MC / Poll - ensure at least 2 options up to 4.
       const padded = [...current]
-      while (padded.length < 4) {
+      while (padded.length < 2) {
         padded.push({ text: '', isCorrect: false, orderIndex: padded.length })
       }
       patch({ answerOptions: padded.slice(0, 4) })
@@ -157,8 +158,18 @@ const typeLabel = computed(() => questionTypeLabel(props.question.type))
         <AnswerOptionEditor
           :type="question.type"
           :options="question.answerOptions"
+          :show-errors="!!errors?.length"
           @update:options="onOptions"
         />
+        <ul v-if="errors?.length" class="mt-2 space-y-0.5" role="alert">
+          <li
+            v-for="(err, i) in errors"
+            :key="i"
+            class="text-sm text-red-600 font-medium"
+          >
+            ⚠ {{ err }}
+          </li>
+        </ul>
       </div>
     </div>
   </article>
