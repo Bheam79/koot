@@ -2,9 +2,11 @@ using System.Security.Claims;
 using Koot.Api.Data;
 using Koot.Api.Dtos.Auth;
 using Koot.Api.Models;
+using Koot.Api.Options;
 using Koot.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace Koot.Api.Controllers;
@@ -29,6 +31,7 @@ public class AuthController : ControllerBase
     /// then returns a JWT.
     /// </summary>
     [HttpPost("register")]
+    [EnableRateLimiting(RateLimitPolicies.Register)]
     public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
     {
         if (!ModelState.IsValid)
@@ -77,6 +80,7 @@ public class AuthController : ControllerBase
 
     /// <summary>Validate credentials and return a JWT.</summary>
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
     {
         if (!ModelState.IsValid)

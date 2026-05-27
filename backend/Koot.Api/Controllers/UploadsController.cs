@@ -1,6 +1,8 @@
 using Koot.Api.Dtos.Quizzes;
+using Koot.Api.Options;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Koot.Api.Controllers;
 
@@ -41,6 +43,7 @@ public class UploadsController : ControllerBase
     /// e.g. Quiz.CoverImageUrl or Question.ImageUrl.
     /// </summary>
     [HttpPost("image")]
+    [EnableRateLimiting(RateLimitPolicies.Upload)]
     [RequestSizeLimit(MaxBytes)]
     [RequestFormLimits(MultipartBodyLengthLimit = MaxBytes)]
     public async Task<ActionResult<UploadResponse>> UploadImage([FromForm] IFormFile? file)

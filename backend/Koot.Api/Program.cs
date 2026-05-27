@@ -1,9 +1,14 @@
+using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using Koot.Api.Data;
 using Koot.Api.Hubs;
+using Koot.Api.Options;
 using Koot.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
@@ -98,6 +103,77 @@ builder.Services.AddSignalR();
 // Health checks (basic)
 builder.Services.AddHealthChecks();
 
+// ---- Rate limiting ----
+// Thresholds are bound via IOptions<RateLimitingOptions> so tests can override them
+// with PostConfigure<RateLimitingOptions> without restarting the host.
+builder.Services.Configure<RateLimitingOptions>(
+    builder.Configuration.GetSection(RateLimitingOptions.SectionName));
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // POST /api/auth/login — sliding window per IP.
+    // Options are resolved at request time so test overrides via PostConfigure are honoured.
+    options.AddPolicy(RateLimitPolicies.Login, httpContext =>
+    {
+        var rlOpts = httpContext.RequestServices
+            .GetRequiredService<IOptions<RateLimitingOptions>>().Value.Login;
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: $"login:{ip}",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = rlOpts.PermitLimit,
+                Window = TimeSpan.FromSeconds(rlOpts.WindowSeconds),
+                SegmentsPerWindow = 3,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            });
+    });
+
+    // POST /api/auth/register — sliding window per IP
+    options.AddPolicy(RateLimitPolicies.Register, httpContext =>
+    {
+        var rlOpts = httpContext.RequestServices
+            .GetRequiredService<IOptions<RateLimitingOptions>>().Value.Register;
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: $"register:{ip}",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = rlOpts.PermitLimit,
+                Window = TimeSpan.FromSeconds(rlOpts.WindowSeconds),
+                SegmentsPerWindow = 3,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            });
+    });
+
+    // POST /api/uploads/image — sliding window per authenticated UserId (IP fallback for anonymous).
+    // UseAuthentication() runs before UseRateLimiter() in the pipeline so User is populated here.
+    options.AddPolicy(RateLimitPolicies.Upload, httpContext =>
+    {
+        var rlOpts = httpContext.RequestServices
+            .GetRequiredService<IOptions<RateLimitingOptions>>().Value.Upload;
+        var userId = httpContext.User.FindFirstValue("userId");
+        var partitionKey = userId is not null
+            ? $"upload:user:{userId}"
+            : $"upload:ip:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = rlOpts.PermitLimit,
+                Window = TimeSpan.FromSeconds(rlOpts.WindowSeconds),
+                SegmentsPerWindow = 6,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            });
+    });
+});
+
 var app = builder.Build();
 
 // ---- Pipeline ----
@@ -117,6 +193,9 @@ app.UseStaticFiles();
 app.UseCors("Frontend");
 
 app.UseAuthentication();
+// Rate limiter runs after authentication so httpContext.User is populated, allowing
+// per-userId partitioning on the upload endpoint while falling back to IP for anonymous.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
