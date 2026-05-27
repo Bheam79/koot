@@ -10,6 +10,7 @@ const router = useRouter()
 const route = useRoute()
 
 const sessionExpired = computed(() => route.query.reason === 'session-expired')
+const passwordReset = computed(() => route.query.reason === 'password-reset')
 
 async function onSubmit() {
   const ok = await auth.login(email.value, password.value)
@@ -30,6 +31,14 @@ async function onSubmit() {
       role="status"
     >
       Your session expired. Please log in again to continue.
+    </p>
+
+    <p
+      v-if="passwordReset"
+      class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+      role="status"
+    >
+      Your password has been reset. You can now log in with your new password.
     </p>
 
     <form class="space-y-4" @submit.prevent="onSubmit">
@@ -67,6 +76,12 @@ async function onSubmit() {
         {{ auth.loading ? 'Logging in…' : 'Log in' }}
       </button>
     </form>
+
+    <p class="text-sm text-center mt-4">
+      <RouterLink to="/forgot-password" class="text-koot-blue underline">
+        Forgot your password?
+      </RouterLink>
+    </p>
 
     <p class="text-sm text-slate-500 mt-6 text-center">
       Don't have an account?
