@@ -58,6 +58,19 @@ const routes: RouteRecordRaw[] = [
     props: true,
     meta: { requiresAuth: true },
   },
+  {
+    path: '/history',
+    name: 'history',
+    component: () => import('../views/HistoryView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/history/:id',
+    name: 'session-detail',
+    component: () => import('../views/SessionDetailView.vue'),
+    props: true,
+    meta: { requiresAuth: true },
+  },
   { path: '/join', name: 'join', component: () => import('../views/JoinView.vue') },
   {
     path: '/join/:code',
