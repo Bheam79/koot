@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<GameSession> GameSessions => Set<GameSession>();
     public DbSet<GameParticipant> GameParticipants => Set<GameParticipant>();
     public DbSet<GameAnswer> GameAnswers => Set<GameAnswer>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -100,6 +101,29 @@ public class AppDbContext : DbContext
                 .WithMany(s => s.Participants)
                 .HasForeignKey(p => p.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ---- RefreshToken ----
+        modelBuilder.Entity<RefreshToken>(e =>
+        {
+            e.ToTable("refresh_tokens");
+
+            // Fast lookup by hash on every token validation
+            e.HasIndex(t => t.TokenHash).IsUnique();
+
+            // Efficient query for active tokens per user
+            e.HasIndex(t => new { t.UserId, t.RevokedAt });
+
+            e.HasOne(t => t.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Self-referencing FK: a rotated token points to its replacement
+            e.HasOne(t => t.ReplacedByToken)
+                .WithMany()
+                .HasForeignKey(t => t.ReplacedByTokenId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ---- GameAnswer ----

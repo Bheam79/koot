@@ -20,4 +20,5 @@ public class User
     // Navigation
     public ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
     public ICollection<GameSession> HostedSessions { get; set; } = new List<GameSession>();
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

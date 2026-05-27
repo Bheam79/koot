@@ -6,6 +6,7 @@ using Koot.Api.Models;
 using Koot.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -31,8 +32,19 @@ public class AuthControllerTests
         return mock;
     }
 
+    private static IConfiguration MakeConfig(int refreshExpiryDays = 30)
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["Jwt:RefreshTokenExpiryDays"] = refreshExpiryDays.ToString(),
+        };
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(settings)
+            .Build();
+    }
+
     private static AuthController MakeController(AppDbContext db, IJwtService jwt)
-        => new(db, jwt, NullLogger<AuthController>.Instance);
+        => new(db, jwt, NullLogger<AuthController>.Instance, MakeConfig());
 
     // ─── Register ─────────────────────────────────────────────────────────────
 
@@ -56,6 +68,24 @@ public class AuthControllerTests
         response.Token.Should().Be("test.jwt.token");
         response.Username.Should().Be("alice");
         response.Email.Should().Be("alice@example.com");
+    }
+
+    [Fact]
+    public async Task Register_ReturnsOk_WithRefreshToken()
+    {
+        await using var db = MakeDb("auth_register_refresh_token");
+        var ctrl = MakeController(db, MakeJwt().Object);
+
+        var result = await ctrl.Register(new RegisterRequest
+        {
+            Username = "alice",
+            Email = "alice@example.com",
+            Password = "password123",
+        });
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<AuthResponse>().Subject;
+        response.RefreshToken.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -165,6 +195,31 @@ public class AuthControllerTests
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var response = ok.Value.Should().BeOfType<AuthResponse>().Subject;
         response.Token.Should().Be("test.jwt.token");
+    }
+
+    [Fact]
+    public async Task Login_ReturnsOk_WithRefreshToken()
+    {
+        await using var db = MakeDb("auth_login_refresh_token");
+        db.Users.Add(new User
+        {
+            Username = "alice",
+            Email = "alice@example.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
+        });
+        await db.SaveChangesAsync();
+
+        var ctrl = MakeController(db, MakeJwt().Object);
+
+        var result = await ctrl.Login(new LoginRequest
+        {
+            Email = "alice@example.com",
+            Password = "password123",
+        });
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<AuthResponse>().Subject;
+        response.RefreshToken.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
