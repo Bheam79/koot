@@ -47,6 +47,14 @@ public class GameCleanupService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Marks Lobby/InProgress sessions older than <see cref="SessionMaxAge"/>
+    /// as Finished and drops their in-memory state.
+    /// <para>
+    /// Finished sessions are intentionally never deleted; they feed the
+    /// history/analytics API.
+    /// </para>
+    /// </summary>
     private async Task CleanupAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();

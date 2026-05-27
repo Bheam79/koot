@@ -77,6 +77,13 @@ public class AppDbContext : DbContext
             e.HasIndex(s => s.Code).IsUnique();
             e.HasIndex(s => s.Status);
 
+            // Covers the host history query:
+            //   WHERE HostUserId = ? AND Status = Finished
+            //   ORDER BY EndedAt DESC
+            e.HasIndex(s => new { s.HostUserId, s.Status, s.EndedAt })
+                .IsDescending(false, false, true)
+                .HasDatabaseName("IX_game_sessions_HostUserId_Status_EndedAt");
+
             e.Property(s => s.Status)
                 .HasConversion<int>();
 
@@ -148,10 +155,16 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<GameAnswer>(e =>
         {
             e.ToTable("game_answers");
-            e.HasIndex(a => a.SessionId);
+            // The (SessionId, QuestionId) composite below covers SessionId-only
+            // lookups, so a standalone SessionId index would be redundant.
             e.HasIndex(a => a.ParticipantId);
             e.HasIndex(a => a.QuestionId);
             e.HasIndex(a => new { a.ParticipantId, a.QuestionId }).IsUnique();
+
+            // Covers per-question aggregation in the session-detail endpoint:
+            //   WHERE SessionId = ? GROUP BY QuestionId ...
+            e.HasIndex(a => new { a.SessionId, a.QuestionId })
+                .HasDatabaseName("IX_game_answers_SessionId_QuestionId");
 
             e.HasOne(a => a.Session)
                 .WithMany(s => s.Answers)
