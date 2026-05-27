@@ -16,7 +16,9 @@ vi.mock('../services/api', () => {
   return {
     default: mockApi,
     TOKEN_STORAGE_KEY: 'koot.token',
+    REFRESH_TOKEN_STORAGE_KEY: 'koot.refreshToken',
     setUnauthorizedHandler: vi.fn(),
+    setRefreshHandler: vi.fn(),
   }
 })
 

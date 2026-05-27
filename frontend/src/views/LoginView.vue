@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -8,6 +8,8 @@ const password = ref('')
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+
+const sessionExpired = computed(() => route.query.reason === 'session-expired')
 
 async function onSubmit() {
   const ok = await auth.login(email.value, password.value)
@@ -21,6 +23,14 @@ async function onSubmit() {
 <template>
   <section class="max-w-md mx-auto px-4 py-12">
     <h1 class="text-2xl font-bold mb-6">Log in</h1>
+
+    <p
+      v-if="sessionExpired"
+      class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+      role="status"
+    >
+      Your session expired. Please log in again to continue.
+    </p>
 
     <form class="space-y-4" @submit.prevent="onSubmit">
       <div>

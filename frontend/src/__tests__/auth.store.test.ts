@@ -16,7 +16,9 @@ vi.mock('../services/api', () => {
   return {
     default: mockApi,
     TOKEN_STORAGE_KEY: 'koot.token',
+    REFRESH_TOKEN_STORAGE_KEY: 'koot.refreshToken',
     setUnauthorizedHandler: vi.fn(),
+    setRefreshHandler: vi.fn(),
   }
 })
 
@@ -36,6 +38,7 @@ const makeAuthResponse = () => ({
     username: 'alice',
     email: 'alice@example.com',
     expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+    refreshToken: 'refresh-token-xyz',
   },
 })
 
@@ -114,6 +117,85 @@ describe('useAuthStore', () => {
     expect(store.user).toBeNull()
     expect(store.token).toBeNull()
     expect(localStorage.getItem('koot.token')).toBeNull()
+    expect(localStorage.getItem('koot.refreshToken')).toBeNull()
+  })
+
+  // ── refresh token persistence ──────────────────────────────────────────────
+
+  it('login: stores refresh token in localStorage', async () => {
+    mockApi.post.mockResolvedValueOnce(makeAuthResponse())
+    const store = useAuthStore()
+
+    await store.login('alice@example.com', 'password123')
+
+    expect(store.refreshToken).toBe('refresh-token-xyz')
+    expect(localStorage.getItem('koot.refreshToken')).toBe('refresh-token-xyz')
+  })
+
+  it('reads refresh token from localStorage on init', () => {
+    localStorage.setItem('koot.refreshToken', 'persisted-refresh-token')
+    setActivePinia(createPinia())
+    const store = useAuthStore()
+    expect(store.refreshToken).toBe('persisted-refresh-token')
+  })
+
+  // ── refreshSession ─────────────────────────────────────────────────────────
+
+  it('refreshSession: returns false and clears session when no refresh token', async () => {
+    const store = useAuthStore()
+    const ok = await store.refreshSession()
+
+    expect(ok).toBe(false)
+    expect(store.token).toBeNull()
+    expect(mockApi.post).not.toHaveBeenCalled()
+  })
+
+  it('refreshSession: posts stored refresh token and persists the new pair on success', async () => {
+    localStorage.setItem('koot.token', 'old-jwt')
+    localStorage.setItem('koot.refreshToken', 'old-refresh')
+    setActivePinia(createPinia())
+    const store = useAuthStore()
+
+    mockApi.post.mockResolvedValueOnce({
+      data: {
+        token: 'new-jwt',
+        userId: 1,
+        username: 'alice',
+        email: 'alice@example.com',
+        expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+        refreshToken: 'new-refresh',
+      },
+    })
+
+    const ok = await store.refreshSession()
+
+    expect(ok).toBe(true)
+    expect(mockApi.post).toHaveBeenCalledWith('/api/auth/refresh', {
+      refreshToken: 'old-refresh',
+    })
+    expect(store.token).toBe('new-jwt')
+    expect(store.refreshToken).toBe('new-refresh')
+    expect(localStorage.getItem('koot.token')).toBe('new-jwt')
+    expect(localStorage.getItem('koot.refreshToken')).toBe('new-refresh')
+  })
+
+  it('refreshSession: clears session on API failure', async () => {
+    localStorage.setItem('koot.token', 'old-jwt')
+    localStorage.setItem('koot.refreshToken', 'old-refresh')
+    setActivePinia(createPinia())
+    const store = useAuthStore()
+
+    mockApi.post.mockRejectedValueOnce({
+      response: { status: 401, data: { error: 'Invalid or expired refresh token.' } },
+    })
+
+    const ok = await store.refreshSession()
+
+    expect(ok).toBe(false)
+    expect(store.token).toBeNull()
+    expect(store.refreshToken).toBeNull()
+    expect(localStorage.getItem('koot.token')).toBeNull()
+    expect(localStorage.getItem('koot.refreshToken')).toBeNull()
   })
 
   // ── register ───────────────────────────────────────────────────────────────
