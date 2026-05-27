@@ -43,8 +43,13 @@ public class AuthControllerTests
             .Build();
     }
 
+    private sealed class NullEmailService : IEmailService
+    {
+        public Task SendAsync(string to, string subject, string body) => Task.CompletedTask;
+    }
+
     private static AuthController MakeController(AppDbContext db, IJwtService jwt)
-        => new(db, jwt, NullLogger<AuthController>.Instance, MakeConfig());
+        => new(db, jwt, new NullEmailService(), NullLogger<AuthController>.Instance, MakeConfig());
 
     // ─── Register ─────────────────────────────────────────────────────────────
 

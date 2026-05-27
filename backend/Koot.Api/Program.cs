@@ -90,6 +90,7 @@ builder.Services.AddAuthorization();
 
 // Application services
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IEmailService, LoggingEmailService>();
 builder.Services.AddScoped<GameService>();
 builder.Services.AddSingleton<GameStateService>();
 builder.Services.AddHostedService<GameCleanupService>();

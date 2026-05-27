@@ -45,8 +45,13 @@ public class RefreshTokenTests
             .Build();
     }
 
+    private sealed class NullEmailService : IEmailService
+    {
+        public Task SendAsync(string to, string subject, string body) => Task.CompletedTask;
+    }
+
     private static AuthController MakeController(AppDbContext db, IJwtService jwt, int refreshExpiryDays = 30)
-        => new(db, jwt, NullLogger<AuthController>.Instance, MakeConfig(refreshExpiryDays));
+        => new(db, jwt, new NullEmailService(), NullLogger<AuthController>.Instance, MakeConfig(refreshExpiryDays));
 
     /// <summary>Mimics the hash logic in AuthController so tests can pre-seed tokens.</summary>
     private static string HashToken(string rawToken)

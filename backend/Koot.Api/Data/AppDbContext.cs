@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<GameParticipant> GameParticipants => Set<GameParticipant>();
     public DbSet<GameAnswer> GameAnswers => Set<GameAnswer>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -124,6 +125,23 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(t => t.ReplacedByTokenId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ---- PasswordResetToken ----
+        modelBuilder.Entity<PasswordResetToken>(e =>
+        {
+            e.ToTable("password_reset_tokens");
+
+            // Fast lookup by hash on every reset attempt
+            e.HasIndex(t => t.TokenHash).IsUnique();
+
+            // Efficient query for outstanding tokens per user
+            e.HasIndex(t => new { t.UserId, t.UsedAt });
+
+            e.HasOne(t => t.User)
+                .WithMany(u => u.PasswordResetTokens)
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ---- GameAnswer ----

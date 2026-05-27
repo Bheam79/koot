@@ -21,4 +21,5 @@ public class User
     public ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
     public ICollection<GameSession> HostedSessions { get; set; } = new List<GameSession>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } = new List<PasswordResetToken>();
 }
