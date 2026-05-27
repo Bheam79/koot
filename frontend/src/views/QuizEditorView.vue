@@ -2,7 +2,7 @@
 // Shared editor for both /quiz/create and /quiz/:id/edit. The route is detected by
 // the presence of an `id` prop; if absent, we create-then-edit in place so question
 // CRUD can hit the backend immediately.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRouter } from 'vue-router'
 import ImageUpload from '../components/ImageUpload.vue'
 import QuestionEditor from '../components/QuestionEditor.vue'
@@ -62,6 +62,10 @@ async function load(id: number) {
   try {
     const quiz = await getQuiz(id)
     applyServerQuiz(quiz)
+    // Wait for Vue to flush any watchers triggered by applyServerQuiz (e.g. the
+    // questions deep-watcher that would call markDirty), then explicitly clear the
+    // dirty flag so the UI starts in a "saved" state after loading.
+    await nextTick()
     dirty.value = false
   } catch (e: unknown) {
     errorMsg.value = extractErr(e, 'Failed to load quiz.')
@@ -96,13 +100,22 @@ async function saveQuizMetadata() {
     }
     if (quizId.value === null) {
       const created = await createQuiz(body)
-      // Move the URL to the canonical edit route so future reloads work.
       quizId.value = created.id
-      applyServerQuiz(created)
+      // Sync only metadata fields from the server response — do NOT call
+      // applyServerQuiz here because that would reset questions.value to the
+      // server's (empty) list, losing any locally-added questions that saveAll
+      // still needs to persist.
+      title.value = created.title
+      description.value = created.description ?? ''
+      coverImageUrl.value = created.coverImageUrl ?? null
+      // Move the URL to the canonical edit route so future reloads work.
       await router.replace({ name: 'quiz-edit', params: { id: String(created.id) } })
     } else {
       const updated = await updateQuiz(quizId.value, body)
-      applyServerQuiz(updated)
+      // Same: sync only metadata; questions are persisted separately below.
+      title.value = updated.title
+      description.value = updated.description ?? ''
+      coverImageUrl.value = updated.coverImageUrl ?? null
     }
     dirty.value = false
     successMsg.value = 'Saved.'

@@ -33,7 +33,13 @@ test.describe('Quiz Editor', () => {
     await page.getByRole('button', { name: /multiple choice/i }).click()
 
     // Fill the question text
-    await page.getByPlaceholder(/what is the question/i).fill('What is 2 + 2?')
+    await page.getByPlaceholder(/what do you want to ask/i).fill('What is 2 + 2?')
+
+    // Fill answer options (MC requires at least 2 non-empty options, one marked correct)
+    const optionInputs = page.getByPlaceholder(/answer \d+/i)
+    await optionInputs.nth(0).fill('Three')
+    await optionInputs.nth(1).fill('Four')
+    await page.getByRole('button', { name: /mark correct/i }).first().click()
 
     // Save
     await page.getByRole('button', { name: /save quiz/i }).click()
@@ -51,7 +57,13 @@ test.describe('Quiz Editor', () => {
     // Add a question then save
     await page.getByRole('button', { name: /add question/i }).click()
     await page.getByRole('button', { name: /multiple choice/i }).click()
-    await page.getByPlaceholder(/what is the question/i).fill('Question?')
+    await page.getByPlaceholder(/what do you want to ask/i).fill('Question?')
+
+    // Fill answer options (MC requires at least 2 non-empty options, one marked correct)
+    const optionInputs = page.getByPlaceholder(/answer \d+/i)
+    await optionInputs.nth(0).fill('Option A')
+    await optionInputs.nth(1).fill('Option B')
+    await page.getByRole('button', { name: /mark correct/i }).first().click()
 
     await page.getByRole('button', { name: /save quiz/i }).click()
 
@@ -74,7 +86,7 @@ test.describe('Quiz Editor', () => {
     await expect(page.getByText(/multiple choice/i)).toBeVisible()
 
     // Fill question text
-    await page.getByPlaceholder(/what is the question/i).fill('Favourite colour?')
+    await page.getByPlaceholder(/what do you want to ask/i).fill('Favourite colour?')
 
     // Options appear in the answer option editor
     const optionInputs = page.getByPlaceholder(/answer \d+/i)
