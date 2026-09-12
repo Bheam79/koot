@@ -144,8 +144,13 @@ describe('AnswerOptionEditor — Poll', () => {
     const wrapper = mount(AnswerOptionEditor, {
       props: { options: makeOptions(3), type },
     })
-    // Poll shows inputs but no "mark correct" buttons
+    // Poll shows inputs but no "mark correct" buttons.  The per-option
+    // "×" remove buttons and the "+ Add option" button are still expected
+    // (3 options > 2, so remove is enabled; 3 < 4, so add is enabled).
     expect(wrapper.findAll('input[type="text"]')).toHaveLength(3)
-    expect(wrapper.findAll('button')).toHaveLength(0)
+    const markCorrectButtons = wrapper
+      .findAll('button')
+      .filter((b) => /mark correct|✓ correct/i.test(b.text()))
+    expect(markCorrectButtons).toHaveLength(0)
   })
 })
